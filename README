@@ -1,0 +1,20 @@
+This is CSV data manipulation scripts
+
+for data splitted in resultFiles use oechem.py:
+
+oechem.py -r resultFiles/ -f in.txt -i result.tgz
+
+For insplitted sdf or sdf.gz first you need to build index DB with position, size and filename of each molecule.
+Needs about 2 hours to finish (no need to run, already builded)
+
+indexer.py --readfromdir ./ --db index.sqlite
+
+To extract molecules to tar.gz file after building index:
+
+fetcher.py  --readfromdir Substance/ --db Substance/index.sqlite --input-file in.txt --output-file results.tgz
+
+Index data can be extracted to csv file for instance:
+sqlite3 -header -csv index.sqlite 'select sid,cid from oechem_data' > output.csv
+
+This csv can be imported to mysql  (use substance1.sql as example. `mysql yourdbname < substance1.sql`)
+

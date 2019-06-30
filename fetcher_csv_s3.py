@@ -7,7 +7,7 @@ from queue import Queue
 def s3get(client, q, resultQ):
     while True:
         (filename,offset, end) = q.get()
-        obj = client.get_object(Bucket='ajay-sdfs', Key='Desc1/'+filename, Range='bytes={}-{}'.format(offset, end))
+        obj = client.get_object(Bucket='desc', Key=filename, Range='bytes={}-{}'.format(offset, end))
         line=obj['Body'].read()
         resultQ.put(line)
         q.task_done()

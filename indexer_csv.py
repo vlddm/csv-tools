@@ -34,11 +34,11 @@ def sec2time(sec, n_msec=0):
     return ('%d days, ' + pattern) % (d, h, m, s)
 
 
-def indexFile(inputDir, filename, fileNumber, cursor):
+def indexFile(inputDir, filename, cursor):
     bytesWriten = 0
     indexData = []
     
-    cursor.execute('INSERT OR REPLACE INTO filenames(id,filename) VALUES (?,?)', (fileNumber,filename))
+    cursor.execute('INSERT OR IGNORE INTO filenames(filename) VALUES (?)', (filename,))
     filename_id = cursor.lastrowid
     if filename.endswith('.gz'):
         opener = gzip.open
@@ -81,17 +81,19 @@ def main(startFrom, dbFile, inputDir):
         filesList = filesList[filesList.index(startFrom):]
         print('Starting from {}'.format(startFrom))
 
-    fileNumber = 0 
     bytesWriten = 0
+    fileNumber = 0
     size = len(filesList)
     fileProcessingSec = 10
     
     with SQLite(dbFile) as cursor:
-        initDB(cursor)
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='data'")
+        if not cursor.fetchone():
+            initDB(cursor)
         for currentFile in filesList:
-            currentFileStartTime = time.time()
             fileNumber += 1
-            bytesReaden = indexFile(inputDir, currentFile, fileNumber, cursor)
+            currentFileStartTime = time.time()
+            bytesReaden = indexFile(inputDir, currentFile, cursor)
             secSinceStart = time.time() - work_time
             secLeft = (size-fileNumber)*secSinceStart/fileNumber
             print ("\r{} [{}/{}] {:.2f}MB/sec | time {} | ETA {}".format(currentFile, fileNumber, len(filesList), (bytesReaden/1048576)/(time.time() - currentFileStartTime), sec2time(secSinceStart), sec2time(secLeft)), end="")
@@ -110,7 +112,7 @@ def initDB(cursor):
     );
     CREATE TABLE IF NOT EXISTS filenames (
         id INTEGER PRIMARY KEY NOT NULL,
-        filename TEXT NOT NULL
+        filename TEXT UNIQUE NOT NULL 
     )
     '''
     for statement in initTables.split(';'):
@@ -131,16 +133,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="CSV data indexer", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--db", dest='dbFile',  
                         metavar='DBFILE', required=True,
-                        help="SQLite database file to store index. Must not exist")
+                        help="SQLite database file to store index.")
     parser.add_argument("-r", "--readfromdir", dest='inputDir',  
                         metavar='DIR', default = currentDir,
                         help='Directory to search input CSV files')     
 
     args = parser.parse_args()
 
-    if os.path.isfile(args.dbFile):
-        print("file {} exists, exiting".format(args.dbFile))
-        exit(1)
     inputDir = os.path.abspath(args.inputDir)
     dbFile = os.path.abspath(args.dbFile)
     main(startFrom=None, dbFile = dbFile, inputDir = inputDir)

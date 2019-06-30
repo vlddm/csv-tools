@@ -4,36 +4,41 @@ import sqlite3, sys, os, time, tarfile, boto3
 from threading import Thread
 from queue import Queue
 
-def s3get(client, q, resultQ):
+def s3get(client, inputBucket, q, resultQ):
     while True:
-        (filename,offset, end) = q.get()
-        obj = client.get_object(Bucket='desc', Key=filename, Range='bytes={}-{}'.format(offset, end))
+        (filename, offset, end) = q.get()
+        obj = client.get_object(Bucket=inputBucket, Key=filename, Range='bytes={}-{}'.format(offset, end))
         line=obj['Body'].read()
         resultQ.put(line)
         q.task_done()
 
-def resPrint(outFile, resultQ):
+def resPrint(outFile, resultQ, amount):
+    counter = 0 
     while True:
         line=resultQ.get()
         outFile.write(line)
+        counter += 1
+        if counter % 1000 == 0:
+            print("\rProgress: [{}/{}]".format(counter, amount), file=sys.stderr, end='')
         resultQ.task_done()
 
-def deliverFiles(ids, dbFile, inputDir, outFile):
+def deliverFiles(ids, dbFile, inputBucket, outFile):
     i = 0
     missedFiles = 0
     client = boto3.client('s3', endpoint_url = 'https://s3.wasabisys.com')
     
     resultQ = Queue(maxsize=0)
-    outThread = Thread(target=resPrint, args=(outFile, resultQ), daemon = True)
+    outThread = Thread(target=resPrint, args=(outFile, resultQ, len(ids)), daemon = True)
     outThread.start()
 
     q = Queue(maxsize=0)
     num_threads = 32
     for i in range(num_threads):
-        worker = Thread(target=s3get, args=(client, q, resultQ), daemon = True)
+        worker = Thread(target=s3get, args=(client, inputBucket, q, resultQ), daemon = True)
         worker.start()
 
 
+    missedIds = 0
     with sqlite3.connect(dbFile) as conn:
         cursor = conn.cursor()
         for sid in ids:
@@ -42,6 +47,9 @@ def deliverFiles(ids, dbFile, inputDir, outFile):
             if row:
                 sid, pos, size, filename = row
                 q.put ((filename, pos, pos+size-1))
+            else:
+                missedIds += 1
+    print("Missed Ids count: {}".format(missedIds))
 
     q.join()
     resultQ.join()
@@ -69,7 +77,7 @@ if __name__ == '__main__':
     parser.add_argument("--db", dest='dbFile',  
                         metavar='DBFILE', required=True,
                         help="SQLite database file to read index from.")
-    parser.add_argument("-r", "--readfromdir", dest='inputDir',  
+    parser.add_argument("-r", "--readfrombucket", dest='inputBucket',  
                         metavar='DIR', required=True,
                         help='Directory to search input SDF files')     
     parser.add_argument("-o", "--output-file", dest='outFile', type=argparse.FileType('wb'), 
@@ -88,7 +96,7 @@ if __name__ == '__main__':
         ids.sort()
         startTime = time.time()
         print("Fetching {} molecules to {}".format(len(ids), args.outFile.name), file=sys.stderr)
-        deliverFiles(ids = ids, dbFile = args.dbFile, inputDir =args.inputDir, outFile = args.outFile)
+        deliverFiles(ids = ids, dbFile = args.dbFile, inputBucket =args.inputBucket, outFile = args.outFile)
         print( "\nExecution completed. Work time {:.2f} sec".format(time.time()-startTime), file=sys.stderr )
     else:
         parser.error ('Either --input-file or --ids is required.')

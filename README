@@ -1,20 +1,37 @@
 This is CSV data manipulation scripts
 
-for data splitted in resultFiles use oechem.py:
+First you need to build index DB with position, size and filename of each molecule.
 
-oechem.py -r resultFiles/ -f in.txt -i result.tgz
+`indexer_csv.py --readfromdir mydata/ --db mydata_index.sqlite`
 
-For insplitted sdf or sdf.gz first you need to build index DB with position, size and filename of each molecule.
-Needs about 2 hours to finish (no need to run, already builded)
+To extract molecules to csv file after building index:
 
-indexer.py --readfromdir ./ --db index.sqlite
+`fetcher_csv.py  --readfromdir mydata/ --db mydata_index.sqlite --input-file in.txt --output-file results.csv`
 
-To extract molecules to tar.gz file after building index:
+Also you can put data to Wasabi.com  bucket.
 
-fetcher.py  --readfromdir Substance/ --db Substance/index.sqlite --input-file in.txt --output-file results.tgz
+First install some cli tools and python modules:
+
+`pip3 install awscli boto3`
+
+Next put key and token to `~/.aws/crednetials`
+```
+[default]
+aws_access_key_id = YOUR_KEY_ID
+aws_secret_access_key = YOUR_KEY
+```
+
+And upload data:
+```
+aws s3 sync mydata/ s3://mybucket/
+```
+Next you can fetch molecules from Wasabi with `fetcher_csv_s3.py`:
+```
+fetcher_csv_s3.py -f 100k.txt --readfrombucket mybucket -o out.csv --db mydata_index.sqlite
+```
 
 Index data can be extracted to csv file for instance:
-sqlite3 -header -csv index.sqlite 'select sid,cid from oechem_data' > output.csv
+sqlite3 -header -csv index.sqlite 'select sid from data' > output.csv
 
 This csv can be imported to mysql  (use substance1.sql as example. `mysql yourdbname < substance1.sql`)
 

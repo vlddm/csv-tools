@@ -39,7 +39,8 @@ def indexFile(inputDir, filename, cursor):
     indexData = []
     
     cursor.execute('INSERT OR IGNORE INTO filenames(filename) VALUES (?)', (filename,))
-    filename_id = cursor.lastrowid
+    cursor.execute('SELECT id from filenames where filename = ?', (filename,))
+    (filename_id,) = cursor.fetchone()
     if filename.endswith('.gz'):
         opener = gzip.open
     else:
@@ -59,9 +60,12 @@ def indexFile(inputDir, filename, cursor):
                 position += size
                 idprev = id
                 #print(indexData)
+            except ValueError as e:
+                print("\n", e.__class__.__name__, e)
+                print("execution continue")
             except Exception as e:
-                print("\n", e)
-                print("j:'{}'".format(line))
+                print("\n", e.__class__.__name__, e)
+                print("line: '{}'".format(line))
                 print(filename)
                 print(idprev)
                 exit(1)

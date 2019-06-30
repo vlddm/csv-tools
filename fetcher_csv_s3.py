@@ -49,7 +49,7 @@ def deliverFiles(ids, dbFile, inputBucket, outFile):
                 q.put ((filename, pos, pos+size-1))
             else:
                 missedIds += 1
-    print("Missed Ids count: {}".format(missedIds))
+    print("\nMissed Ids count: {}".format(missedIds))
 
     q.join()
     resultQ.join()
